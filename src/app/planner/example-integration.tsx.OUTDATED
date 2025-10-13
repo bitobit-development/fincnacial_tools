@@ -1,0 +1,361 @@
+'use client';
+
+// =============================================================================
+// Example Integration - AI Retirement Planner Page
+// =============================================================================
+// This is an example showing how to integrate all hooks and Server Actions
+// into the planner page. Tal can use this as a reference for the actual implementation.
+// =============================================================================
+
+import { useState, useEffect } from 'react';
+import { FormProvider } from 'react-hook-form';
+import { usePlannerForm, useFunds, useCalculations, useLocalStorage } from '@/hooks';
+import { savePlan, loadDefaultPlan, planToFormData } from '@/app/actions/plans';
+import type { PlannerFormData } from '@/lib/schemas/plannerSchema';
+
+/**
+ * Example Planner Page Component
+ *
+ * This demonstrates:
+ * 1. Form state management with react-hook-form
+ * 2. Real-time calculations with debouncing
+ * 3. Fund data fetching and auto-population
+ * 4. Local storage persistence
+ * 5. Server Actions for save/load
+ * 6. Loading and error states
+ */
+export default function PlannerPageExample() {
+  // Initialize form with default values
+  const form = usePlannerForm();
+  const { watch, setValue, handleSubmit } = form;
+
+  // Watch all form values for calculations
+  const formData = watch();
+
+  // Fetch Discovery funds
+  const { funds, loading: fundsLoading, error: fundsError } = useFunds();
+
+  // Run calculations with debouncing (250ms)
+  const { results, loading: calcLoading, error: calcError } = useCalculations(formData);
+
+  // Local storage persistence
+  const [, saveToLocalStorage, clearLocalStorage] = useLocalStorage<PlannerFormData>(
+    'planner-form-draft',
+    formData
+  );
+
+  // Component state
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Auto-save to localStorage on form change (debounced via useEffect)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveToLocalStorage(formData);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData, saveToLocalStorage]);
+
+  // Load default plan on mount
+  useEffect(() => {
+    const loadPlan = async () => {
+      // In a real app, get userId from auth context
+      const userId = 'demo-user-id';
+
+      const response = await loadDefaultPlan(userId);
+
+      if (response.success && response.data) {
+        // Type assertion since we know the structure from DB
+        const plan = response.data as {
+          currentAge: number;
+          retirementAge: number;
+          startingBalance: string;
+          monthlyContribution: string;
+          annualReturn: string;
+          inflation: string;
+          drawdownRate: string;
+          targetMonthlyToday: string | null;
+          fundName: string | null;
+          fundCode: string | null;
+        };
+
+        const formValues = planToFormData(plan);
+        Object.entries(formValues).forEach(([key, value]) => {
+          setValue(key as keyof PlannerFormData, value);
+        });
+      }
+    };
+
+    loadPlan();
+  }, [setValue]);
+
+  // Auto-populate fund data when user selects a fund
+  useEffect(() => {
+    if (formData.fundCode && funds.length > 0) {
+      const selectedFund = funds.find((f) => f.fundCode === formData.fundCode);
+
+      if (selectedFund && selectedFund.cagr5y) {
+        // Auto-update annual return from fund's 5-year CAGR
+        setValue('annualReturn', selectedFund.cagr5y);
+        setValue('fundName', selectedFund.fundName);
+
+        // Show notification (in real app, use toast)
+        console.log(`Annual return updated to ${selectedFund.cagr5y}% from fund data`);
+      }
+    }
+  }, [formData.fundCode, funds, setValue]);
+
+  // Handle form submission (save to database)
+  const onSubmit = async (data: PlannerFormData) => {
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      // Create FormData for Server Action
+      const formDataObj = new FormData();
+
+      // In a real app, get userId from auth context
+      formDataObj.append('userId', 'demo-user-id');
+      formDataObj.append('planName', 'My Retirement Plan');
+      formDataObj.append('description', 'Auto-saved plan');
+
+      // Append form data
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formDataObj.append(key, value.toString());
+        }
+      });
+
+      // Call Server Action
+      const response = await savePlan(formDataObj);
+
+      if (response.success) {
+        setSaveSuccess(true);
+        // Clear localStorage draft after successful save
+        clearLocalStorage();
+      } else {
+        setSaveError(response.error || 'Failed to save plan');
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Render loading state
+  if (fundsLoading) {
+    return <div>Loading funds...</div>;
+  }
+
+  // Render error state
+  if (fundsError) {
+    return <div>Error loading funds: {fundsError.message}</div>;
+  }
+
+  return (
+    <FormProvider {...form}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">AI Retirement Planner</h1>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => form.reset()}
+              className="px-4 py-2 text-sm border rounded"
+            >
+              Reset
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Plan'}
+            </button>
+          </div>
+        </div>
+
+        {/* Save status messages */}
+        {saveSuccess && (
+          <div className="p-4 bg-green-100 text-green-800 rounded">Plan saved successfully!</div>
+        )}
+        {saveError && (
+          <div className="p-4 bg-red-100 text-red-800 rounded">Error: {saveError}</div>
+        )}
+
+        {/* Form Grid (Tal will replace with actual UI components) */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Left Column: Inputs */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Your Information</h2>
+
+            {/* Age Inputs - Tal's SliderCard components will go here */}
+            <div>
+              <label>Current Age: {formData.currentAge}</label>
+              <input
+                type="range"
+                min="18"
+                max="80"
+                value={formData.currentAge}
+                onChange={(e) => setValue('currentAge', parseInt(e.target.value))}
+              />
+            </div>
+
+            <div>
+              <label>Retirement Age: {formData.retirementAge}</label>
+              <input
+                type="range"
+                min="40"
+                max="100"
+                value={formData.retirementAge}
+                onChange={(e) => setValue('retirementAge', parseInt(e.target.value))}
+              />
+            </div>
+
+            {/* Financial Inputs */}
+            <div>
+              <label>Starting Balance: R{formData.startingBalance.toLocaleString()}</label>
+              <input
+                type="range"
+                min="0"
+                max="1000000"
+                step="10000"
+                value={formData.startingBalance}
+                onChange={(e) => setValue('startingBalance', parseInt(e.target.value))}
+              />
+            </div>
+
+            <div>
+              <label>Monthly Contribution: R{formData.monthlyContribution.toLocaleString()}</label>
+              <input
+                type="range"
+                min="0"
+                max="50000"
+                step="500"
+                value={formData.monthlyContribution}
+                onChange={(e) => setValue('monthlyContribution', parseInt(e.target.value))}
+              />
+            </div>
+
+            {/* Fund Selector - Tal's FundSelector component will go here */}
+            <div>
+              <label>Select Fund</label>
+              <select
+                value={formData.fundCode || ''}
+                onChange={(e) => setValue('fundCode', e.target.value || undefined)}
+                className="w-full p-2 border rounded"
+              >
+                <option value="">No fund selected</option>
+                {funds.map((fund) => (
+                  <option key={fund.fundCode} value={fund.fundCode}>
+                    {fund.fundName} (5Y CAGR: {fund.cagr5y || 'N/A'}%)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Return/Inflation/Drawdown Sliders */}
+            <div>
+              <label>Annual Return: {formData.annualReturn}%</label>
+              <input
+                type="range"
+                min="-10"
+                max="30"
+                step="0.5"
+                value={formData.annualReturn}
+                onChange={(e) => setValue('annualReturn', parseFloat(e.target.value))}
+              />
+            </div>
+
+            <div>
+              <label>Inflation: {formData.inflation}%</label>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="0.5"
+                value={formData.inflation}
+                onChange={(e) => setValue('inflation', parseFloat(e.target.value))}
+              />
+            </div>
+
+            <div>
+              <label>Drawdown Rate: {formData.drawdownRate}%</label>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="0.5"
+                value={formData.drawdownRate}
+                onChange={(e) => setValue('drawdownRate', parseFloat(e.target.value))}
+              />
+            </div>
+          </div>
+
+          {/* Right Column: Results */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Projection Results</h2>
+
+            {calcLoading && <div>Calculating...</div>}
+
+            {calcError && <div className="text-red-600">Calculation error: {calcError.message}</div>}
+
+            {results && !calcLoading && (
+              <>
+                {/* Statistics - Tal's PlannerResultsPanel components will go here */}
+                <div className="p-4 bg-gray-100 rounded space-y-2">
+                  <div>
+                    <strong>Projected Value at Retirement:</strong> R
+                    {results.statistics.projectedValueAtRetirement.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Total Contributed:</strong> R
+                    {results.statistics.totalContributed.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Total Withdrawn:</strong> R
+                    {results.statistics.totalWithdrawn.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Total Tax Paid:</strong> R
+                    {results.statistics.totalTaxPaid.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Net After-Tax Income:</strong> R
+                    {results.statistics.netAfterTaxIncome.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Wealth Retention Ratio:</strong>{' '}
+                    {results.statistics.wealthRetentionRatio.toFixed(2)}%
+                  </div>
+                  <div>
+                    <strong>Effective Tax Rate:</strong>{' '}
+                    {results.statistics.effectiveTaxRate.toFixed(2)}%
+                  </div>
+                  <div>
+                    <strong>Fund Depletion Age:</strong>{' '}
+                    {results.statistics.fundDepletionAge || 'Never'}
+                  </div>
+                </div>
+
+                {/* Chart - Tal's chart component will go here */}
+                <div className="p-4 bg-gray-50 rounded">
+                  <h3 className="font-semibold mb-2">Projection Chart</h3>
+                  <div className="text-sm text-gray-600">
+                    {results.projections.length} years projected
+                  </div>
+                  {/* Tal will integrate Recharts here */}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </form>
+    </FormProvider>
+  );
+}
