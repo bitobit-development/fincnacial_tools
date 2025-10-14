@@ -27,6 +27,13 @@ export enum DiscoveryPhase {
 // User Profile (60+ fields covering all 45 questions)
 // ============================================================================
 
+export interface ManualAdjustment<T = number> {
+  value: T;
+  adjusted_at: Date;
+  adjusted_by: 'user' | 'advisor' | 'ai';
+  previous_value?: T;
+}
+
 export interface UserProfile {
   // Phase 1: Personal Profile (7 questions)
   name?: string;
@@ -113,6 +120,13 @@ export interface UserProfile {
   business_succession_plan?: boolean;
   expected_inheritance?: number;
   expected_inheritance_year?: number;
+
+  // Manual Adjustments (tracking user/advisor overrides)
+  manual_adjustments?: {
+    monthly_ra_contribution?: ManualAdjustment<number>;
+    annualReturn?: ManualAdjustment<number>;
+    inflationRate?: ManualAdjustment<number>;
+  };
 
   // Metadata
   profile_completeness?: number; // 0-100%

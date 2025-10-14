@@ -139,21 +139,36 @@ In effect, SARS is subsidizing ${currentMarginalRate}% of your retirement saving
 export async function calculateRetirementProjection(params: {
   user_profile: UserProfile;
   include_monthly_breakdown?: boolean;
+  manual_adjustments?: {
+    monthly_ra_contribution?: number;
+    investment_return?: number;
+    inflation_rate?: number;
+  };
 }): Promise<{
   monthly_projections: MonthlyProjection[];
   annual_summaries: AnnualSummary[];
 }> {
-  const { user_profile, include_monthly_breakdown = false } = params;
+  const { user_profile, include_monthly_breakdown = false, manual_adjustments } = params;
 
   // Extract required fields with defaults
   const currentAge = user_profile.current_age || 30;
   const retirementAge = user_profile.retirement_age || 65;
   const currentRABalance = user_profile.current_ra_balance || 0;
-  const monthlyRAContribution = user_profile.monthly_ra_contribution || 0;
   const employerContribution = user_profile.employer_contribution_rand || 0;
-  const investmentReturn = 10; // Default 10% p.a.
-  const inflation = 5; // Default 5% p.a.
+
+  // Prioritize manual adjustments over profile values
+  const manualAdj = manual_adjustments || user_profile.manual_adjustments;
+  const monthlyRAContribution = manualAdj?.monthly_ra_contribution ?? user_profile.monthly_ra_contribution ?? 0;
+  const investmentReturn = manualAdj?.investment_return ?? 10; // Default 10% p.a.
+  const inflation = manualAdj?.inflation_rate ?? 5; // Default 5% p.a.
   const drawdownRate = user_profile.desired_drawdown_rate || 5;
+
+  console.log('[Calculations] Using values:', {
+    monthlyRAContribution,
+    investmentReturn,
+    inflation,
+    hasManualAdjustments: !!manualAdj,
+  });
 
   // Build planner state for existing projection engine
   const plannerState: PlannerState = {

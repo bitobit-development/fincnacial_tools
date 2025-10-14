@@ -16,12 +16,14 @@ import {
   addAdvisorMessage,
   getRecentMessages,
 } from '@/lib/db/queries';
+import { getAuthenticatedUserId } from '@/lib/auth';
+import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Request body schema
 const ChatRequestSchema = z.object({
   message: z.string().min(1).max(5000),
   sessionId: z.string().uuid().optional().nullable(),
-  userId: z.string(),
+  userId: z.string().uuid(),
 });
 
 /**
@@ -31,6 +33,24 @@ const ChatRequestSchema = z.object({
 export async function POST(request: NextRequest) {
   console.log('[API] POST /api/advisor/chat - Request received');
 
+  // 🔒 SECURITY: Authenticate the request
+  const authenticatedUserId = await getAuthenticatedUserId(request);
+
+  if (!authenticatedUserId) {
+    console.warn('[API] Unauthenticated chat request');
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Authentication required',
+      },
+      { status: 401 }
+    );
+  }
+
+  // Apply rate limiting
+  const rateLimitResult = await applyRateLimit(request, RATE_LIMITS.CHAT_MESSAGE);
+  if (rateLimitResult) return rateLimitResult;
+
   try {
     // Parse and validate request body
     const body = await request.json();
@@ -38,6 +58,18 @@ export async function POST(request: NextRequest) {
 
     const { message, sessionId, userId } = ChatRequestSchema.parse(body);
     console.log('[API] Validated request - userId:', userId, 'sessionId:', sessionId);
+
+    // 🔒 SECURITY: Verify userId in request matches authenticated user
+    if (userId !== authenticatedUserId) {
+      console.warn('[API] userId mismatch in chat - requested:', userId, 'authenticated:', authenticatedUserId);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized: Cannot send messages as another user',
+        },
+        { status: 403 }
+      );
+    }
 
     // Load or create session from database
     let dbSession;
@@ -256,6 +288,20 @@ export async function POST(request: NextRequest) {
  * Get conversation history for a session
  */
 export async function GET(request: NextRequest) {
+  // 🔒 SECURITY: Authenticate the request
+  const authenticatedUserId = await getAuthenticatedUserId(request);
+
+  if (!authenticatedUserId) {
+    console.warn('[API] Unauthenticated GET chat request');
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Authentication required',
+      },
+      { status: 401 }
+    );
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const sessionId = searchParams.get('sessionId');
@@ -271,17 +317,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 🔒 SECURITY: Verify userId parameter matches authenticated user
+    if (userId && userId !== authenticatedUserId) {
+      console.warn('[API] Unauthorized GET chat - userId mismatch');
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized: Cannot access another user\'s data',
+        },
+        { status: 403 }
+      );
+    }
+
     let session;
     let messages;
 
     if (sessionId) {
       // Load specific session
       session = await getSessionById(sessionId);
+
+      // 🔒 SECURITY: Verify session belongs to authenticated user
+      if (session && session.userId !== authenticatedUserId) {
+        console.warn('[API] Unauthorized session access attempt');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Unauthorized: Cannot access another user\'s session',
+          },
+          { status: 403 }
+        );
+      }
+
       if (session) {
         messages = session.messages;
       }
     } else if (userId) {
-      // Load active session for user
+      // Load active session for user (already verified above)
       session = await getActiveSession(userId);
       if (session) {
         messages = await getRecentMessages(session.id, 50);

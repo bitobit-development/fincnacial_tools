@@ -11,7 +11,9 @@ import { StatCard } from '@/components/custom/StatCard';
 import { StatisticsGrid } from '@/components/custom/StatisticsGrid';
 import { ProjectionChart } from '@/components/custom/ProjectionChart';
 import { TaxBreakdownChart } from '@/components/custom/TaxBreakdownChart';
-import type { Statistics, ProjectionYear } from '@/types';
+import { SalaryBreakdownTable } from '@/components/advisor/SalaryBreakdownTable';
+import { DrawdownScheduleTable } from '@/components/advisor/DrawdownScheduleTable';
+import type { Statistics, ProjectionYear, PlannerState } from '@/types';
 import {
   TrendingUp,
   Wallet,
@@ -27,6 +29,9 @@ import { cn } from '@/lib/utils';
 interface PlannerResultsPanelProps {
   statistics?: Statistics;
   projections?: ProjectionYear[];
+  plannerState?: PlannerState;
+  userName?: string;
+  grossAnnualIncome?: number;
   loading?: boolean;
   error?: string;
   className?: string;
@@ -48,6 +53,9 @@ interface PlannerResultsPanelProps {
 export function PlannerResultsPanel({
   statistics,
   projections,
+  plannerState,
+  userName,
+  grossAnnualIncome,
   loading = false,
   error,
   className,
@@ -187,7 +195,9 @@ export function PlannerResultsPanel({
             <BarChart3 className="h-5 w-5 text-white" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Projection Results</h2>
+            <h2 className="text-2xl font-bold text-white">
+              {userName ? `${userName}'s Retirement Plan` : 'Your Retirement Plan'}
+            </h2>
             <p className="mt-1 text-sm text-white/90">
               Your retirement savings projection and tax analysis
             </p>
@@ -196,6 +206,19 @@ export function PlannerResultsPanel({
       </div>
 
       <CardContent className="space-y-8 pt-6">
+        {/* Salary Breakdown Table */}
+        {grossAnnualIncome && plannerState?.monthlyContribution && plannerState.monthlyContribution > 0 && (
+          <>
+            <section aria-labelledby="salary-breakdown-section">
+              <SalaryBreakdownTable
+                grossAnnualIncome={grossAnnualIncome}
+                monthlyRAContribution={plannerState.monthlyContribution}
+              />
+            </section>
+            <Separator />
+          </>
+        )}
+
         {/* Key Statistics Grid */}
         <section aria-labelledby="statistics-section">
           <h3 id="statistics-section" className="mb-4 text-sm font-semibold">
@@ -316,6 +339,24 @@ export function PlannerResultsPanel({
           </div>
           <TaxBreakdownChart data={taxBreakdownData} height={300} />
         </section>
+
+        {/* Drawdown Schedule Table */}
+        {plannerState && statistics && statistics.projectedValueAtRetirement > 0 && (
+          <>
+            <Separator />
+            <section aria-labelledby="drawdown-section">
+              <DrawdownScheduleTable
+                retirementAge={plannerState.retirementAge}
+                currentAge={plannerState.currentAge}
+                lifeExpectancy={(plannerState as any).lifeExpectancy || 85}
+                initialBalance={statistics.projectedValueAtRetirement}
+                annualWithdrawal={statistics.projectedValueAtRetirement * (plannerState.drawdownRate / 100)}
+                annualReturn={plannerState.annualReturn / 100}
+                inflationRate={plannerState.inflation / 100}
+              />
+            </section>
+          </>
+        )}
 
         {/* Fund Depletion Warning */}
         {statistics.fundDepletionAge && statistics.fundDepletionAge < 100 && (

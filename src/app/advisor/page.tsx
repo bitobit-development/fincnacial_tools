@@ -8,8 +8,10 @@ import { NewSessionDialog } from '@/components/advisor/NewSessionDialog';
 import { ProjectionChart } from '@/components/custom/ProjectionChart';
 import { TaxBreakdownChart } from '@/components/custom/TaxBreakdownChart';
 import { StatCard } from '@/components/custom/StatCard';
+import { PlanAdjustmentsPanel } from '@/components/advisor/PlanAdjustmentsPanel';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Toaster } from '@/components/ui/sonner';
 import {
   Wallet,
   TrendingUp,
@@ -24,6 +26,7 @@ import {
 import type { ConversationMessage, UserProfile } from '@/types/aiAdvisor';
 import type { ProjectionYear, PlannerState } from '@/types';
 import { generateFullProjection } from '@/lib/calculations/projections';
+import { usePlannerCalculations } from '@/hooks/usePlannerCalculations';
 
 /**
  * Convert UserProfile to PlannerState for projection calculations
@@ -78,12 +81,82 @@ Let's start with the basics: What's your name, and how old are you?`,
   const [showNewSessionDialog, setShowNewSessionDialog] = React.useState(false);
   const [isCreatingSession, setIsCreatingSession] = React.useState(false);
 
+  // Manual adjustments state for PlanAdjustmentsPanel
+  const [manualAdjustments, setManualAdjustments] = React.useState({
+    monthlyContribution: 0,
+    investmentReturn: 7.0,
+    inflationRate: 5.0,
+  });
+
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Stable AI recommendations (doesn't change unless explicitly set)
+  const [aiRecommendations, setAiRecommendations] = React.useState({
+    monthlyContribution: 0,
+    investmentReturn: 7.0,
+    inflationRate: 5.0,
+  });
+
+  // Save state management
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [savedAdjustments, setSavedAdjustments] = React.useState({
+    monthlyContribution: 0,
+    investmentReturn: 7.0,
+    inflationRate: 5.0,
+  });
+
+  // Memoize the stable user profile for calculations to prevent re-renders
+  const stableUserProfile = React.useMemo(() => ({
+    current_age: userProfile.current_age || 35,
+    retirement_age: userProfile.retirement_age || 65,
+    life_expectancy: userProfile.life_expectancy || 90,
+    gross_annual_income: userProfile.gross_annual_income || 0,
+    current_retirement_savings: userProfile.current_retirement_savings || 0,
+  }), [
+    userProfile.current_age,
+    userProfile.retirement_age,
+    userProfile.life_expectancy,
+    userProfile.gross_annual_income,
+    userProfile.current_retirement_savings,
+  ]);
+
+  // Use planner calculations hook for real-time projections
+  const { impactSummary, projections, isCalculating, error } = usePlannerCalculations({
+    aiRecommendations,
+    currentAdjustments: manualAdjustments,
+    userProfile: stableUserProfile,
+  });
 
   // Auto-scroll to bottom when new messages arrive
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Update AI recommendations and manual adjustments when profile changes
+  React.useEffect(() => {
+    if (userProfile.monthly_ra_contribution !== undefined) {
+      const newRecommendations = {
+        monthlyContribution: userProfile.monthly_ra_contribution || 0,
+        investmentReturn: 7.0,
+        inflationRate: 5.0,
+      };
+      setAiRecommendations(newRecommendations);
+      setManualAdjustments(newRecommendations);
+      setSavedAdjustments(newRecommendations);
+    }
+  }, [userProfile.monthly_ra_contribution]);
+
+  // Track unsaved changes
+  React.useEffect(() => {
+    const hasChanges =
+      manualAdjustments.monthlyContribution !== savedAdjustments.monthlyContribution ||
+      manualAdjustments.investmentReturn !== savedAdjustments.investmentReturn ||
+      manualAdjustments.inflationRate !== savedAdjustments.inflationRate;
+
+    setHasUnsavedChanges(hasChanges);
+  }, [manualAdjustments, savedAdjustments]);
 
   // Initialize session on mount - load existing or create new
   React.useEffect(() => {
@@ -119,6 +192,23 @@ Let's start with the basics: What's your name, and how old are you?`,
               const profile = result.data.session.userProfile;
               setUserProfile(profile);
               console.log('[Advisor] Loaded user profile:', profile);
+
+              // Load manual adjustments if they exist
+              if (profile.manual_adjustments) {
+                const savedAdjustments = {
+                  monthlyContribution: profile.manual_adjustments.monthly_ra_contribution || 0,
+                  investmentReturn: profile.manual_adjustments.investment_return || 7.0,
+                  inflationRate: profile.manual_adjustments.inflation_rate || 5.0,
+                };
+                console.log('[Advisor] Loaded manual adjustments:', savedAdjustments);
+                setManualAdjustments(savedAdjustments);
+                setSavedAdjustments(savedAdjustments);
+                setAiRecommendations({
+                  monthlyContribution: profile.monthly_ra_contribution || 0,
+                  investmentReturn: 7.0,
+                  inflationRate: 5.0,
+                });
+              }
 
               // Try to generate projections if we have enough data
               const plannerState = userProfileToPlannerState(profile);
@@ -292,6 +382,77 @@ Let's start with the basics: What's your name, and how old are you?`,
       alert(`Failed to start new session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsCreatingSession(false);
+    }
+  };
+
+  // Handle adjustment changes from PlanAdjustmentsPanel
+  const handleAdjustmentChange = (field: string, value: number) => {
+    setManualAdjustments((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // Handle reset to AI recommendations
+  const handleResetAdjustments = () => {
+    setManualAdjustments({
+      monthlyContribution: aiRecommendations.monthlyContribution,
+      investmentReturn: aiRecommendations.investmentReturn,
+      inflationRate: aiRecommendations.inflationRate,
+    });
+  };
+
+  // Handle save adjustments
+  const handleSaveAdjustments = async (adjustments: {
+    monthly_ra_contribution: number;
+    investment_return: number;
+    inflation_rate: number;
+  }) => {
+    if (!sessionId) {
+      throw new Error('No active session');
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const response = await fetch('/api/advisor/session', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: sessionId,
+          adjustments: {
+            monthly_ra_contribution: adjustments.monthly_ra_contribution,
+            investment_return: adjustments.investment_return,
+            inflation_rate: adjustments.inflation_rate,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save adjustments');
+      }
+
+      const data = await response.json();
+      console.log('[Advisor] Adjustments saved:', data);
+
+      // Update saved state
+      setSavedAdjustments({
+        monthlyContribution: adjustments.monthly_ra_contribution,
+        investmentReturn: adjustments.investment_return,
+        inflationRate: adjustments.inflation_rate,
+      });
+
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('[Advisor] Save error:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save');
+      throw error; // Re-throw for toast handling
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -482,12 +643,72 @@ Let's start with the basics: What's your name, and how old are you?`,
 
               {/* Recommendations Tab */}
               <TabsContent value="recommendations" className="space-y-6 mt-6">
-                <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
-                  <Lightbulb className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-sm text-muted-foreground">
-                    Personalized recommendations will appear as you complete the discovery process
-                  </p>
-                </div>
+                {projectionData.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
+                    <Lightbulb className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-sm text-muted-foreground">
+                      Personalized recommendations will appear as you complete the discovery process
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Plan Adjustments Panel with Real-Time Calculations */}
+                    <PlanAdjustmentsPanel
+                      sessionId={sessionId || undefined}
+                      aiRecommendations={aiRecommendations}
+                      currentAdjustments={manualAdjustments}
+                      impactSummary={impactSummary}
+                      isCalculating={isCalculating}
+                      isSaving={isSaving}
+                      hasUnsavedChanges={hasUnsavedChanges}
+                      saveError={saveError}
+                      onAdjustmentChange={handleAdjustmentChange}
+                      onReset={handleResetAdjustments}
+                      onSave={handleSaveAdjustments}
+                    />
+
+                    {/* Display calculation errors if any */}
+                    {error && (
+                      <div className="rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
+                        <h3 className="text-sm font-semibold text-red-900 dark:text-red-100">
+                          Calculation Error
+                        </h3>
+                        <p className="mt-1 text-sm text-red-800 dark:text-red-200">
+                          {error.message}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Show projected retirement details when available */}
+                    {projections && !isCalculating && (
+                      <div className="rounded-lg border border-border p-4 bg-muted/30 space-y-4">
+                        <h2 className="text-sm font-semibold">Projected Retirement Details</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Retirement Nest Egg</p>
+                            <p className="text-lg font-bold">
+                              {new Intl.NumberFormat('en-ZA', {
+                                style: 'currency',
+                                currency: 'ZAR',
+                                minimumFractionDigits: 0,
+                              }).format(projections.retirementNestEgg)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Monthly Drawdown</p>
+                            <p className="text-lg font-bold">
+                              {new Intl.NumberFormat('en-ZA', {
+                                style: 'currency',
+                                currency: 'ZAR',
+                                minimumFractionDigits: 0,
+                              }).format(projections.monthlyDrawdown)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -501,6 +722,9 @@ Let's start with the basics: What's your name, and how old are you?`,
         onConfirm={handleNewSession}
         isLoading={isCreatingSession}
       />
+
+      {/* Toast Notifications */}
+      <Toaster position="top-right" />
     </div>
   );
 }

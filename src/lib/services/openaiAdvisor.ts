@@ -248,7 +248,7 @@ const FUNCTION_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'calculate_retirement_projection',
       description:
-        'Calculate detailed retirement projection based on user profile. Use when you have sufficient data: age, income, retirement age, current savings.',
+        'Calculate detailed retirement projection based on user profile. Use when you have sufficient data: age, income, retirement age, current savings. IMPORTANT: If user has manual_adjustments in their profile, use those values instead of AI recommendations.',
       parameters: {
         type: 'object',
         properties: {
@@ -262,6 +262,15 @@ const FUNCTION_DEFINITIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           investment_return_rate: { type: 'number', description: 'Expected annual return (e.g., 10 for 10%)' },
           inflation_rate: { type: 'number', description: 'Expected annual inflation (e.g., 5 for 5%)' },
           include_monthly_breakdown: { type: 'boolean', default: false },
+          manual_adjustments: {
+            type: 'object',
+            description: 'User manual adjustments to override AI recommendations (if present in profile)',
+            properties: {
+              monthly_ra_contribution: { type: 'number' },
+              investment_return: { type: 'number' },
+              inflation_rate: { type: 'number' },
+            },
+          },
         },
         required: [
           'current_age',
@@ -359,6 +368,45 @@ export class OpenAIAdvisorService {
   }
 
   /**
+   * Build system prompt with manual adjustments context
+   */
+  private buildSystemPrompt(session: ConversationSession): string {
+    let systemPrompt = SYSTEM_PROMPT;
+
+    // Add manual adjustments context if present
+    const manualAdj = session.user_profile?.manual_adjustments;
+
+    if (manualAdj && (
+      manualAdj.monthly_ra_contribution !== undefined ||
+      manualAdj.investment_return !== undefined ||
+      manualAdj.inflation_rate !== undefined
+    )) {
+      systemPrompt += `\n\n## IMPORTANT: User Manual Adjustments\n\n`;
+      systemPrompt += `The user has manually adjusted their retirement plan parameters:\n`;
+
+      if (manualAdj.monthly_ra_contribution !== undefined) {
+        systemPrompt += `- Monthly RA Contribution: R ${manualAdj.monthly_ra_contribution.toLocaleString('en-ZA')}\n`;
+      }
+      if (manualAdj.investment_return !== undefined) {
+        systemPrompt += `- Investment Return Rate: ${manualAdj.investment_return}%\n`;
+      }
+      if (manualAdj.inflation_rate !== undefined) {
+        systemPrompt += `- Inflation Rate: ${manualAdj.inflation_rate}%\n`;
+      }
+
+      if (manualAdj.adjusted_at) {
+        systemPrompt += `\nThese adjustments were made on ${new Date(manualAdj.adjusted_at).toLocaleDateString('en-ZA')}.\n`;
+      }
+
+      systemPrompt += `\nYou MUST acknowledge these manual adjustments in your responses and use these values in calculations instead of your AI recommendations.\n`;
+      systemPrompt += `When discussing the plan, refer to these as "your adjusted values" or "your customized parameters".\n`;
+      systemPrompt += `If the user asks for projections or calculations, ALWAYS use these manually adjusted values.\n`;
+    }
+
+    return systemPrompt;
+  }
+
+  /**
    * Send a message to the AI advisor and get a response
    */
   async chat(
@@ -371,9 +419,14 @@ export class OpenAIAdvisorService {
       console.log('[OpenAI Advisor] API Key present:', !!process.env.OPENAI_API_KEY);
       console.log('[OpenAI Advisor] API Key prefix:', process.env.OPENAI_API_KEY?.substring(0, 10) + '...');
 
+      // Build system prompt with manual adjustments context
+      const systemPrompt = this.buildSystemPrompt(session);
+      console.log('[OpenAI Advisor] System prompt includes manual adjustments:',
+        systemPrompt.includes('User Manual Adjustments'));
+
       // Build conversation history
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         ...session.messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
@@ -570,6 +623,7 @@ export class OpenAIAdvisorService {
     return await calculateRetirementProjection({
       user_profile: args,
       include_monthly_breakdown: args.include_monthly_breakdown || false,
+      manual_adjustments: args.manual_adjustments,
     });
   }
 
