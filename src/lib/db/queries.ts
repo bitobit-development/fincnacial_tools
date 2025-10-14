@@ -8,12 +8,20 @@ import {
   discoveryFundsCache,
   sarsTaxTablesCache,
   cpiDataCache,
+  aiAdvisorSessions,
+  aiAdvisorMessages,
+  aiAdvisorRecommendations,
+  aiAdvisorPlanOverrides,
   type InsertRetirementPlan,
   type InsertScenario,
   type InsertProjectionHistory,
   type InsertDiscoveryFundCache,
   type InsertSarsTaxTableCache,
   type InsertCpiDataCache,
+  type InsertAIAdvisorSession,
+  type InsertAIAdvisorMessage,
+  type InsertAIAdvisorRecommendation,
+  type InsertAIAdvisorPlanOverride,
 } from './schema';
 
 // ============================================================================
@@ -416,6 +424,189 @@ export async function cleanupOldCPIData() {
   const result = await db
     .delete(cpiDataCache)
     .where(sql`${cpiDataCache.year} < ${tenYearsAgo}`)
+    .returning();
+
+  return result.length;
+}
+
+// ============================================================================
+// AI ADVISOR SESSION QUERIES
+// ============================================================================
+
+/**
+ * Get active session for user
+ */
+export async function getActiveSession(userId: string) {
+  const result = await db
+    .select()
+    .from(aiAdvisorSessions)
+    .where(and(eq(aiAdvisorSessions.userId, userId), eq(aiAdvisorSessions.isActive, true)))
+    .orderBy(desc(aiAdvisorSessions.lastActivity))
+    .limit(1);
+  return result[0] || null;
+}
+
+/**
+ * Get session by ID with messages
+ */
+export async function getSessionById(sessionId: string) {
+  const session = await db.query.aiAdvisorSessions.findFirst({
+    where: eq(aiAdvisorSessions.id, sessionId),
+    with: {
+      messages: {
+        orderBy: (messages, { asc }) => [asc(messages.timestamp)],
+      },
+      recommendations: true,
+      planOverrides: true,
+    },
+  });
+  return session || null;
+}
+
+/**
+ * Create new AI advisor session
+ */
+export async function createAdvisorSession(sessionData: InsertAIAdvisorSession) {
+  const result = await db.insert(aiAdvisorSessions).values(sessionData).returning();
+  return result[0];
+}
+
+/**
+ * Update AI advisor session
+ */
+export async function updateAdvisorSession(sessionId: string, updates: Partial<InsertAIAdvisorSession>) {
+  const result = await db
+    .update(aiAdvisorSessions)
+    .set({ ...updates, updatedAt: new Date(), lastActivity: new Date() })
+    .where(eq(aiAdvisorSessions.id, sessionId))
+    .returning();
+  return result[0];
+}
+
+/**
+ * Deactivate all sessions for user (when starting new session)
+ */
+export async function deactivateUserSessions(userId: string) {
+  await db
+    .update(aiAdvisorSessions)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(eq(aiAdvisorSessions.userId, userId), eq(aiAdvisorSessions.isActive, true)));
+}
+
+/**
+ * Get all sessions for user
+ */
+export async function getUserSessions(userId: string, limit: number = 10) {
+  return db
+    .select()
+    .from(aiAdvisorSessions)
+    .where(eq(aiAdvisorSessions.userId, userId))
+    .orderBy(desc(aiAdvisorSessions.lastActivity))
+    .limit(limit);
+}
+
+// ============================================================================
+// AI ADVISOR MESSAGE QUERIES
+// ============================================================================
+
+/**
+ * Add message to session
+ */
+export async function addAdvisorMessage(messageData: InsertAIAdvisorMessage) {
+  const result = await db.insert(aiAdvisorMessages).values(messageData).returning();
+  return result[0];
+}
+
+/**
+ * Get messages for session
+ */
+export async function getSessionMessages(sessionId: string) {
+  return db
+    .select()
+    .from(aiAdvisorMessages)
+    .where(eq(aiAdvisorMessages.sessionId, sessionId))
+    .orderBy(aiAdvisorMessages.timestamp);
+}
+
+/**
+ * Get last N messages for session
+ */
+export async function getRecentMessages(sessionId: string, limit: number = 20) {
+  const messages = await db
+    .select()
+    .from(aiAdvisorMessages)
+    .where(eq(aiAdvisorMessages.sessionId, sessionId))
+    .orderBy(desc(aiAdvisorMessages.timestamp))
+    .limit(limit);
+
+  return messages.reverse(); // Reverse to get chronological order
+}
+
+// ============================================================================
+// AI ADVISOR RECOMMENDATION QUERIES
+// ============================================================================
+
+/**
+ * Save recommendation
+ */
+export async function saveRecommendation(recommendationData: InsertAIAdvisorRecommendation) {
+  const result = await db.insert(aiAdvisorRecommendations).values(recommendationData).returning();
+  return result[0];
+}
+
+/**
+ * Get recommendations for session
+ */
+export async function getSessionRecommendations(sessionId: string) {
+  return db
+    .select()
+    .from(aiAdvisorRecommendations)
+    .where(eq(aiAdvisorRecommendations.sessionId, sessionId))
+    .orderBy(desc(aiAdvisorRecommendations.createdAt));
+}
+
+// ============================================================================
+// AI ADVISOR PLAN OVERRIDE QUERIES
+// ============================================================================
+
+/**
+ * Save plan override
+ */
+export async function savePlanOverride(overrideData: InsertAIAdvisorPlanOverride) {
+  const result = await db.insert(aiAdvisorPlanOverrides).values(overrideData).returning();
+  return result[0];
+}
+
+/**
+ * Get plan overrides for session
+ */
+export async function getSessionOverrides(sessionId: string) {
+  return db
+    .select()
+    .from(aiAdvisorPlanOverrides)
+    .where(eq(aiAdvisorPlanOverrides.sessionId, sessionId))
+    .orderBy(desc(aiAdvisorPlanOverrides.createdAt));
+}
+
+// ============================================================================
+// CLEANUP FUNCTIONS
+// ============================================================================
+
+/**
+ * Clean up inactive sessions (older than 30 days)
+ */
+export async function cleanupInactiveSessions() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const result = await db
+    .delete(aiAdvisorSessions)
+    .where(
+      and(
+        eq(aiAdvisorSessions.isActive, false),
+        sql`${aiAdvisorSessions.lastActivity} < ${thirtyDaysAgo}`
+      )
+    )
     .returning();
 
   return result.length;

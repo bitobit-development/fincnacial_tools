@@ -6,6 +6,7 @@ import {
   CardContent,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatCard } from '@/components/custom/StatCard';
 import { StatisticsGrid } from '@/components/custom/StatisticsGrid';
 import { ProjectionChart } from '@/components/custom/ProjectionChart';
@@ -19,6 +20,7 @@ import {
   Percent,
   AlertCircle,
   BarChart3,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -206,6 +208,7 @@ export function PlannerResultsPanel({
               icon={Wallet}
               variant="info"
               delay={0}
+              tooltip="The total amount of money you will deposit into your retirement account from now until retirement"
             />
             <StatCard
               title="Retirement Value"
@@ -213,6 +216,7 @@ export function PlannerResultsPanel({
               icon={TrendingUp}
               variant="success"
               delay={100}
+              tooltip="The projected total value of your retirement savings when you reach retirement age, before any withdrawals"
             />
             <StatCard
               title="Total Tax Paid"
@@ -220,6 +224,7 @@ export function PlannerResultsPanel({
               icon={Receipt}
               variant="warning"
               delay={200}
+              tooltip="The total tax you'll pay to SARS on your retirement withdrawals over your lifetime"
             />
             <StatCard
               title="Net After-Tax Income"
@@ -227,6 +232,7 @@ export function PlannerResultsPanel({
               icon={Banknote}
               variant="success"
               delay={300}
+              tooltip="The actual money you'll receive after all taxes are paid on your retirement withdrawals"
             />
             <StatCard
               title="Wealth Retention"
@@ -234,6 +240,7 @@ export function PlannerResultsPanel({
               icon={Percent}
               variant="success"
               delay={400}
+              tooltip="What percentage of your contributions you keep after taxes. Higher is better (e.g., 85% means you keep R85 for every R100 you contributed)"
             />
             <StatCard
               title="Effective Tax Rate"
@@ -241,6 +248,7 @@ export function PlannerResultsPanel({
               icon={Receipt}
               variant="warning"
               delay={500}
+              tooltip="Your average tax rate on retirement income. Lower is better (e.g., 15% means R15 tax on every R100 withdrawn)"
             />
           </StatisticsGrid>
         </section>
@@ -249,9 +257,29 @@ export function PlannerResultsPanel({
 
         {/* Projection Chart */}
         <section aria-labelledby="projection-section">
-          <h3 id="projection-section" className="mb-4 text-sm font-semibold">
-            Balance Projection Over Time
-          </h3>
+          <div className="mb-4 flex items-center gap-2">
+            <h3 id="projection-section" className="text-sm font-semibold">
+              Balance Projection Over Time
+            </h3>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-full transition-colors hover:opacity-80"
+                    aria-label="Information about Balance Projection Over Time"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    Shows how your retirement savings will grow until retirement and decline as you withdraw during retirement
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <ProjectionChart
             data={projections}
             height={400}
@@ -263,9 +291,29 @@ export function PlannerResultsPanel({
 
         {/* Tax Breakdown Chart */}
         <section aria-labelledby="tax-section">
-          <h3 id="tax-section" className="mb-4 text-sm font-semibold">
-            Tax Breakdown by Type
-          </h3>
+          <div className="mb-4 flex items-center gap-2">
+            <h3 id="tax-section" className="text-sm font-semibold">
+              Tax Breakdown by Type
+            </h3>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-full transition-colors hover:opacity-80"
+                    aria-label="Information about Tax Breakdown by Type"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    Visualizes the different types of taxes you'll pay on your retirement income over time. This helps you understand your total tax liability.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <TaxBreakdownChart data={taxBreakdownData} height={300} />
         </section>
 

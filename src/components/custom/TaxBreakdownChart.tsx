@@ -12,6 +12,13 @@ import {
   ResponsiveContainer,
   TooltipProps,
 } from 'recharts';
+import {
+  Tooltip as UITooltip,
+  TooltipContent as UITooltipContent,
+  TooltipProvider as UITooltipProvider,
+  TooltipTrigger as UITooltipTrigger,
+} from '@/components/ui/tooltip';
+import { HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TaxBreakdownData {
@@ -172,6 +179,47 @@ export function TaxBreakdownChart({
           <Legend
             wrapperStyle={{
               paddingTop: '20px',
+            }}
+            content={(props) => {
+              const { payload } = props;
+              const taxTooltips: Record<string, string> = {
+                'Income Tax': "Tax on your retirement annuity withdrawals, calculated using SARS progressive tax brackets",
+                'Capital Gains Tax': "Tax on investment profits when you sell assets (e.g., shares or property)",
+                'Dividend Tax': "Tax on dividends received from company shares (usually 20% in South Africa)",
+                'Interest Tax': "Tax on interest earned from savings accounts or bonds"
+              };
+
+              return (
+                <div className="flex flex-wrap items-center justify-center gap-4 pt-5">
+                  {payload?.map((entry: any, index: number) => (
+                    <div key={`legend-${index}`} className="flex items-center gap-2">
+                      <div
+                        className="h-3 w-8 rounded"
+                        style={{ backgroundColor: entry.color }}
+                      />
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        {entry.value}
+                        <UITooltipProvider>
+                          <UITooltip>
+                            <UITooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-full transition-colors hover:opacity-80"
+                                aria-label={`Information about ${entry.value}`}
+                              >
+                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                              </button>
+                            </UITooltipTrigger>
+                            <UITooltipContent className="max-w-xs">
+                              <p className="text-xs">{taxTooltips[entry.value]}</p>
+                            </UITooltipContent>
+                          </UITooltip>
+                        </UITooltipProvider>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
             }}
           />
           <Bar

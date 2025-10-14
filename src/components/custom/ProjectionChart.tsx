@@ -12,6 +12,13 @@ import {
   ResponsiveContainer,
   TooltipProps,
 } from 'recharts';
+import {
+  Tooltip as UITooltip,
+  TooltipContent as UITooltipContent,
+  TooltipProvider as UITooltipProvider,
+  TooltipTrigger as UITooltipTrigger,
+} from '@/components/ui/tooltip';
+import { HelpCircle } from 'lucide-react';
 import type { ProjectionYear } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -170,6 +177,47 @@ export function ProjectionChart({
               paddingTop: '20px',
             }}
             iconType="line"
+            content={(props) => {
+              const { payload } = props;
+              return (
+                <div className="flex flex-wrap items-center justify-center gap-4 pt-5">
+                  {payload?.map((entry: any, index: number) => (
+                    <div key={`legend-${index}`} className="flex items-center gap-2">
+                      <div
+                        className="h-3 w-8 rounded"
+                        style={{
+                          backgroundColor: entry.color,
+                          opacity: entry.type === 'line' && entry.payload?.strokeDasharray ? 0.7 : 1,
+                        }}
+                      />
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        {entry.value}
+                        <UITooltipProvider>
+                          <UITooltip>
+                            <UITooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-full transition-colors hover:opacity-80"
+                                aria-label={`Information about ${entry.value}`}
+                              >
+                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                              </button>
+                            </UITooltipTrigger>
+                            <UITooltipContent className="max-w-xs">
+                              <p className="text-xs">
+                                {index === 0
+                                  ? "The actual rand value in your account without adjusting for inflation (what you'll see in your bank statement)"
+                                  : "The purchasing power of your money in today's rands. Shows what your future balance can actually buy in today's terms"}
+                              </p>
+                            </UITooltipContent>
+                          </UITooltip>
+                        </UITooltipProvider>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }}
           />
           <Line
             type="monotone"

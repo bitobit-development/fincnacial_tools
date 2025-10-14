@@ -236,10 +236,156 @@ export const cpiDataCache = pgTable(
 );
 
 // ============================================================================
+// 8. AI ADVISOR CONVERSATION SESSIONS TABLE
+// ============================================================================
+export const aiAdvisorSessions = pgTable(
+  'ai_advisor_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+
+    // Session metadata
+    startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+    lastActivity: timestamp('last_activity', { withTimezone: true }).defaultNow().notNull(),
+    currentPhase: varchar('current_phase', { length: 50 }).notNull().default('personal_profile'),
+    isActive: boolean('is_active').default(true).notNull(),
+
+    // User profile data (JSONB for flexibility)
+    userProfile: jsonb('user_profile').notNull().default('{}'),
+
+    // Advisor state
+    totalQuestionsAsked: integer('total_questions_asked').default(0).notNull(),
+    questionsAnswered: integer('questions_answered').default(0).notNull(),
+    phasesCompleted: jsonb('phases_completed').default('[]'),
+    confidenceScore: integer('confidence_score').default(0).notNull(),
+    needsClarification: jsonb('needs_clarification').default('[]'),
+    readyForProjection: boolean('ready_for_projection').default(false).notNull(),
+
+    // Metadata
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_ai_sessions_user_id').on(table.userId),
+    index('idx_ai_sessions_active').on(table.userId, table.isActive),
+    index('idx_ai_sessions_last_activity').on(table.lastActivity),
+  ]
+);
+
+// ============================================================================
+// 9. AI ADVISOR MESSAGES TABLE
+// ============================================================================
+export const aiAdvisorMessages = pgTable(
+  'ai_advisor_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => aiAdvisorSessions.id, { onDelete: 'cascade' }),
+
+    // Message content
+    role: varchar('role', { length: 20 }).notNull(), // 'user' | 'assistant' | 'system'
+    content: text('content').notNull(),
+    timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
+
+    // Discovery phase at time of message
+    phase: varchar('phase', { length: 50 }),
+
+    // Data extracted from this message
+    extractedData: jsonb('extracted_data'),
+
+    // Function calls made
+    functionCalls: jsonb('function_calls'),
+
+    // Metadata
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_ai_messages_session_id').on(table.sessionId),
+    index('idx_ai_messages_timestamp').on(table.sessionId, table.timestamp),
+    index('idx_ai_messages_role').on(table.role),
+  ]
+);
+
+// ============================================================================
+// 10. AI ADVISOR RECOMMENDATIONS TABLE
+// ============================================================================
+export const aiAdvisorRecommendations = pgTable(
+  'ai_advisor_recommendations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => aiAdvisorSessions.id, { onDelete: 'cascade' }),
+
+    // Recommendation details
+    category: varchar('category', { length: 50 }).notNull(),
+    priority: varchar('priority', { length: 20 }).notNull(), // 'critical' | 'high' | 'medium' | 'low'
+    title: varchar('title', { length: 255 }).notNull(),
+    summary: text('summary').notNull(),
+    detailedExplanation: text('detailed_explanation').notNull(),
+    actionSteps: jsonb('action_steps').notNull(), // Array of strings
+    estimatedImpact: jsonb('estimated_impact'), // Object with impact metrics
+    regulatoryReference: varchar('regulatory_reference', { length: 255 }),
+
+    // Override tracking
+    overridden: boolean('overridden').default(false).notNull(),
+    overrideReason: text('override_reason'),
+    overrideBy: varchar('override_by', { length: 255 }), // Financial advisor name/ID
+    overrideAt: timestamp('override_at', { withTimezone: true }),
+
+    // Metadata
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_ai_recommendations_session_id').on(table.sessionId),
+    index('idx_ai_recommendations_priority').on(table.priority),
+    index('idx_ai_recommendations_category').on(table.category),
+    index('idx_ai_recommendations_overridden').on(table.overridden),
+  ]
+);
+
+// ============================================================================
+// 11. AI ADVISOR PLAN OVERRIDES TABLE
+// ============================================================================
+export const aiAdvisorPlanOverrides = pgTable(
+  'ai_advisor_plan_overrides',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => aiAdvisorSessions.id, { onDelete: 'cascade' }),
+
+    // Override details
+    overriddenBy: varchar('overridden_by', { length: 255 }).notNull(), // Financial advisor name/ID
+    field: varchar('field', { length: 100 }).notNull(), // UserProfile field name
+    aiRecommendedValue: jsonb('ai_recommended_value').notNull(),
+    advisorOverrideValue: jsonb('advisor_override_value').notNull(),
+    reason: text('reason').notNull(),
+
+    // Client approval
+    clientApproved: boolean('client_approved').default(false).notNull(),
+    clientApprovedAt: timestamp('client_approved_at', { withTimezone: true }),
+
+    // Metadata
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_ai_overrides_session_id').on(table.sessionId),
+    index('idx_ai_overrides_field').on(table.field),
+    index('idx_ai_overrides_approved').on(table.clientApproved),
+  ]
+);
+
+// ============================================================================
 // RELATIONS (for Drizzle Relational Queries)
 // ============================================================================
 export const usersRelations = relations(users, ({ many }) => ({
   retirementPlans: many(retirementPlans),
+  aiAdvisorSessions: many(aiAdvisorSessions),
 }));
 
 export const retirementPlansRelations = relations(retirementPlans, ({ one, many }) => ({
@@ -270,6 +416,37 @@ export const projectionHistoryRelations = relations(projectionHistory, ({ one })
   }),
 }));
 
+export const aiAdvisorSessionsRelations = relations(aiAdvisorSessions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [aiAdvisorSessions.userId],
+    references: [users.id],
+  }),
+  messages: many(aiAdvisorMessages),
+  recommendations: many(aiAdvisorRecommendations),
+  planOverrides: many(aiAdvisorPlanOverrides),
+}));
+
+export const aiAdvisorMessagesRelations = relations(aiAdvisorMessages, ({ one }) => ({
+  session: one(aiAdvisorSessions, {
+    fields: [aiAdvisorMessages.sessionId],
+    references: [aiAdvisorSessions.id],
+  }),
+}));
+
+export const aiAdvisorRecommendationsRelations = relations(aiAdvisorRecommendations, ({ one }) => ({
+  session: one(aiAdvisorSessions, {
+    fields: [aiAdvisorRecommendations.sessionId],
+    references: [aiAdvisorSessions.id],
+  }),
+}));
+
+export const aiAdvisorPlanOverridesRelations = relations(aiAdvisorPlanOverrides, ({ one }) => ({
+  session: one(aiAdvisorSessions, {
+    fields: [aiAdvisorPlanOverrides.sessionId],
+    references: [aiAdvisorSessions.id],
+  }),
+}));
+
 // ============================================================================
 // TYPE EXPORTS (for TypeScript type inference)
 // ============================================================================
@@ -293,3 +470,15 @@ export type InsertSarsTaxTableCache = typeof sarsTaxTablesCache.$inferInsert;
 
 export type CpiDataCache = typeof cpiDataCache.$inferSelect;
 export type InsertCpiDataCache = typeof cpiDataCache.$inferInsert;
+
+export type AIAdvisorSession = typeof aiAdvisorSessions.$inferSelect;
+export type InsertAIAdvisorSession = typeof aiAdvisorSessions.$inferInsert;
+
+export type AIAdvisorMessage = typeof aiAdvisorMessages.$inferSelect;
+export type InsertAIAdvisorMessage = typeof aiAdvisorMessages.$inferInsert;
+
+export type AIAdvisorRecommendation = typeof aiAdvisorRecommendations.$inferSelect;
+export type InsertAIAdvisorRecommendation = typeof aiAdvisorRecommendations.$inferInsert;
+
+export type AIAdvisorPlanOverride = typeof aiAdvisorPlanOverrides.$inferSelect;
+export type InsertAIAdvisorPlanOverride = typeof aiAdvisorPlanOverrides.$inferInsert;

@@ -846,3 +846,112 @@ The following tasks are on the critical path and should be prioritized:
 - Complexity estimates: S (1-2 hours), M (3-8 hours), C (1-3 days)
 - Testing should be performed continuously, not just at phase end
 - Code reviews should happen after each major feature, not just at project end
+
+---
+
+## Phase 20: GPT-5 AI Financial Advisor Chatbot (Week 17-24)
+
+### 20.1 Documentation & Planning (Week 17, Day 1-2)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.1.1 | Create `GPT5-FINANCIAL-ADVISOR-FEATURE.md` with full specification | yael-technical-docs | M | Research complete | 🟢 |
+| AI20.1.2 | Document 45-question discovery framework | yael-technical-docs | M | AI20.1.1 | 🟢 |
+| AI20.1.3 | Document SA tax regulations & two-pot system | yael-technical-docs | M | AI20.1.2 | 🟢 |
+| AI20.1.4 | Create system prompt template with examples | noam-prompt-engineering | C | AI20.1.3 | 🔴 |
+| AI20.1.5 | Update `DEVELOPMENT-TODOLIST.md` with Phase 20 | yael-technical-docs | S | AI20.1.1 | 🟡 |
+| AI20.1.6 | Create `AI-ADVISOR-IMPLEMENTATION-CHECKLIST.md` | rotem-strategy | M | AI20.1.5 | 🔴 |
+
+### 20.2 Foundation & Type System (Week 17, Day 3-4)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.2.1 | Install dependencies (openai, date-fns) | adi-fullstack | S | AI20.1.6 | 🔴 |
+| AI20.2.2 | Configure environment variables (.env.local) | adi-fullstack | S | AI20.2.1 | 🔴 |
+| AI20.2.3 | Create `src/types/aiAdvisor.ts` - UserProfile interface | adi-fullstack | M | AI20.2.2 | 🔴 |
+| AI20.2.4 | Create ConversationMessage, DiscoveryPhase types | adi-fullstack | M | AI20.2.3 | 🔴 |
+| AI20.2.5 | Create AdvisorRecommendation interface | adi-fullstack | M | AI20.2.3 | 🔴 |
+| AI20.2.6 | Create PlanOverride interface | adi-fullstack | M | AI20.2.3 | 🔴 |
+| AI20.2.7 | Create MonthlyProjection interface | adi-fullstack | M | AI20.2.3 | 🔴 |
+| AI20.2.8 | Create Zod schemas for runtime validation | adi-fullstack | M | AI20.2.7 | 🔴 |
+
+### 20.3 OpenAI Service Layer (Week 17, Day 5 - Week 18, Day 1)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.3.1 | Create `src/services/openaiAdvisorService.ts` base class | oren-backend | M | AI20.2.8 | 🔴 |
+| AI20.3.2 | Implement GPT-5 client initialization | oren-backend | M | AI20.3.1 | 🔴 |
+| AI20.3.3 | Load system prompt with SA tax regulations | oren-backend | M | AI20.3.2, AI20.1.4 | 🔴 |
+| AI20.3.4 | Implement conversation state management | oren-backend | C | AI20.3.3 | 🔴 |
+| AI20.3.5 | Create function calling tools | oren-backend | C | AI20.3.4 | 🔴 |
+| AI20.3.6 | Implement streaming response handling | oren-backend | C | AI20.3.5 | 🔴 |
+| AI20.3.7 | Add error handling & retry logic | oren-backend | M | AI20.3.6 | 🔴 |
+| AI20.3.8 | Implement conversation history persistence | oren-backend | M | AI20.3.7 | 🔴 |
+| AI20.3.9 | Add token usage tracking | oren-backend | M | AI20.3.8 | 🔴 |
+
+### 20.4 Discovery Question Engine (Week 18, Day 2-4)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.4.1 | Create `src/lib/discoveryQuestions.ts` with all 45 questions | oren-backend | M | AI20.1.2 | 🔴 |
+| AI20.4.2 | Implement question validation logic | oren-backend | M | AI20.4.1 | 🔴 |
+| AI20.4.3 | Create question branching logic | oren-backend | C | AI20.4.2 | 🔴 |
+| AI20.4.4 | Implement completion percentage tracker | oren-backend | M | AI20.4.3 | 🔴 |
+| AI20.4.5 | Create question phase manager | oren-backend | M | AI20.4.4 | 🔴 |
+| AI20.4.6 | Add question response parser | oren-backend | C | AI20.4.5 | 🔴 |
+
+### 20.5 Tax & Financial Calculation Integration (Week 18, Day 5 - Week 19, Day 1)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.5.1 | Create `src/lib/calculations/sarsTaxCalculator.ts` | oren-backend | C | F6.2.6 | 🔴 |
+| AI20.5.2 | Implement RA contribution limit calculator | oren-backend | M | AI20.5.1 | 🔴 |
+| AI20.5.3 | Implement tax optimization analyzer | oren-backend | C | AI20.5.2 | 🔴 |
+| AI20.5.4 | Create replacement ratio calculator | oren-backend | M | AI20.5.3 | 🔴 |
+| AI20.5.5 | Create capital required calculator | oren-backend | M | AI20.5.4 | 🔴 |
+| AI20.5.6 | Create monthly breakdown generator | oren-backend | C | AI20.5.5 | 🔴 |
+| AI20.5.7 | Integrate with existing projection engine | oren-backend | M | AI20.5.6, F6.1.4 | 🔴 |
+
+### 20.6 API Routes (Week 19, Day 2-3)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.6.1 | Create `/api/ai-advisor/chat` POST route | adi-fullstack | M | AI20.3.9 | 🔴 |
+| AI20.6.2 | Create `/api/ai-advisor/init` POST route | adi-fullstack | M | AI20.6.1 | 🔴 |
+| AI20.6.3 | Create `/api/ai-advisor/profile` GET/POST routes | adi-fullstack | M | AI20.6.2 | 🔴 |
+| AI20.6.4 | Create `/api/ai-advisor/recommendations` POST route | adi-fullstack | M | AI20.6.3 | 🔴 |
+| AI20.6.5 | Create `/api/ai-advisor/monthly-breakdown` POST route | adi-fullstack | M | AI20.6.4 | 🔴 |
+| AI20.6.6 | Add request validation with Zod schemas | adi-fullstack | M | AI20.6.5 | 🔴 |
+| AI20.6.7 | Add rate limiting | oren-backend | M | AI20.6.6 | 🔴 |
+| AI20.6.8 | Add API error handling & logging | adi-fullstack | M | AI20.6.7 | 🔴 |
+| AI20.6.9 | Document API endpoints in OpenAPI format | amit-api-docs | M | AI20.6.8 | 🔴 |
+
+### 20.7 Chat UI Components (Week 19, Day 4-5, Week 20, Day 1-2)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.7.1 | Design chat interface layout | tal-design | M | AI20.6.9 | 🔴 |
+| AI20.7.2 | Create `MessageBubble.tsx` | tal-design | M | AI20.7.1 | 🔴 |
+| AI20.7.3 | Create `MessageList.tsx` with auto-scroll | tal-design | M | AI20.7.2 | 🔴 |
+| AI20.7.4 | Create `ChatInput.tsx` with typing indicator | tal-design | M | AI20.7.3 | 🔴 |
+| AI20.7.5 | Create `TypingIndicator.tsx` | tal-design | S | AI20.7.4 | 🔴 |
+| AI20.7.6 | Create `ProgressIndicator.tsx` | tal-design | M | AI20.7.5 | 🔴 |
+| AI20.7.7 | Create `LivePlanPreview.tsx` | tal-design | C | AI20.7.6 | 🔴 |
+| AI20.7.8 | Create `QuickActions.tsx` | tal-design | M | AI20.7.7 | 🔴 |
+| AI20.7.9 | Add markdown rendering for AI messages | tal-design | M | AI20.7.8 | 🔴 |
+| AI20.7.10 | Add streaming text animation | tal-design | M | AI20.7.9 | 🔴 |
+| AI20.7.11 | Create mobile-responsive layout | tal-design | M | AI20.7.10 | 🔴 |
+
+### 20.8 Main Chat Interface (Week 20, Day 3-4)
+| Task ID | Task | Agent | Complexity | Dependencies | Status |
+|---------|------|-------|------------|--------------|--------|
+| AI20.8.1 | Create `FinancialAdvisorChat.tsx` main component | adi-fullstack | C | AI20.7.11 | 🔴 |
+| AI20.8.2 | Implement WebSocket connection | adi-fullstack | C | AI20.8.1 | 🔴 |
+| AI20.8.3 | Integrate API routes with UI | adi-fullstack | M | AI20.8.2 | 🔴 |
+| AI20.8.4 | Implement conversation state management | adi-fullstack | M | AI20.8.3 | 🔴 |
+| AI20.8.5 | Add message history persistence | adi-fullstack | M | AI20.8.4 | 🔴 |
+| AI20.8.6 | Create `/ai-advisor` page route | adi-fullstack | M | AI20.8.5 | 🔴 |
+| AI20.8.7 | Add conversation reset functionality | adi-fullstack | M | AI20.8.6 | 🔴 |
+| AI20.8.8 | Add export conversation feature | adi-fullstack | M | AI20.8.7 | 🔴 |
+
+**Quality Gate 20A:** ✓ Basic chat functional ✓ GPT-5 responds correctly ✓ Streaming works ✓ UI responsive
+
+### 20.9-20.18 Additional Phases
+*See `docs/GPT5-FINANCIAL-ADVISOR-FEATURE.md` for complete task breakdown of remaining phases (Recommendations, Overrides, Monthly Breakdown, Testing, etc.)*
+
+**Total Phase 20 Effort:** 327.5 hours (~8 weeks)
+
+**Quality Gate 20Z (Final):** ✓ All 45 questions work ✓ Recommendations accurate ✓ Tests pass (>80% coverage) ✓ Security approved ✓ Performance <5s ✓ Accessibility WCAG 2.1 AA ✓ Beta testing complete

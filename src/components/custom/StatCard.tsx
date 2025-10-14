@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowUp, ArrowDown, LucideIcon } from 'lucide-react';
+import { ArrowUp, ArrowDown, LucideIcon, HelpCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface StatCardProps {
@@ -17,6 +18,7 @@ interface StatCardProps {
   formatValue?: (value: number) => string;
   delay?: number;
   className?: string;
+  tooltip?: string;
 }
 
 /**
@@ -51,6 +53,7 @@ export function StatCard({
   formatValue,
   delay = 0,
   className,
+  tooltip,
 }: StatCardProps) {
   // Format value if formatter provided
   const displayValue = React.useMemo(() => {
@@ -130,7 +133,7 @@ export function StatCard({
       <CardContent className="relative p-6">
         {/* Header with title and icon */}
         <div className="flex items-start justify-between mb-4">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
             <p
               className={cn(
                 'text-xs font-semibold uppercase tracking-wider',
@@ -139,6 +142,29 @@ export function StatCard({
             >
               {title}
             </p>
+            {/* Tooltip icon */}
+            {tooltip && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex items-center justify-center rounded-full',
+                        'transition-colors hover:opacity-80',
+                        styles.title
+                      )}
+                      aria-label={`Information about ${title}`}
+                    >
+                      <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="text-xs">{tooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
 
           {/* Icon container */}
