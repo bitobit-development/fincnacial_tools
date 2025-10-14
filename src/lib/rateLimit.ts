@@ -29,6 +29,12 @@ export async function applyRateLimit(
   request: NextRequest,
   limit: number = 10
 ): Promise<NextResponse | null> {
+  // DEVELOPMENT MODE: Disable rate limiting for easier testing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[RATE_LIMIT] Development mode: Rate limiting disabled');
+    return null;
+  }
+
   try {
     // Use IP address as identifier (fallback to 'anonymous' in development)
     const identifier = request.ip ??
@@ -39,6 +45,9 @@ export async function applyRateLimit(
     return null; // No rate limit exceeded
   } catch {
     // Rate limit exceeded
+    console.warn('[RATE_LIMIT] Rate limit exceeded for identifier:',
+      request.ip ?? 'unknown');
+
     return NextResponse.json(
       {
         success: false,
