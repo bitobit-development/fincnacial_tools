@@ -23,7 +23,11 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 const ChatRequestSchema = z.object({
   message: z.string().min(1).max(5000),
   sessionId: z.string().uuid().optional().nullable(),
-  userId: z.string().uuid(),
+  userId: z.string().refine((val) => {
+    // Allow demo UUID (version 0) or standard UUIDs (versions 1-5)
+    return val === '00000000-0000-0000-0000-000000000001' ||
+           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+  }, { message: 'Invalid UUID format' }),
 });
 
 /**
